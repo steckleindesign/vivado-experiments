@@ -2,7 +2,9 @@
 
 // Experiment with case vs if else, parallel mux stuff
 // Integrate a RAM
-// Constrain pins
+// Implement for loop to output sum of mult results
+
+// Constrain pins - funnel the mult outs so there isn't 100 pins
 
 module experiment_top(
     // Next synth a few clks with a PLL
@@ -15,25 +17,19 @@ module experiment_top(
     input  wire        c1,
     input  wire        d1,
     
-    // Not used currently
-    input  wire  [7:0] a8,
-    input  wire  [7:0] b8,
-    input  wire  [7:0] c8,
-    input  wire  [7:0] d8,
-    
     // Used for DSP logic
+    // B is 4-wide due to pin limit
     input  wire [17:0] a18,
-    input  wire [17:0] b18,
+    input  wire  [3:0] b18,
     input  wire [24:0] a25,
     input  wire [24:0] b25,
-    
     
     // Outputs of DSP/SRL logic
     output reg         out0a,
     output reg         out0b,
     output reg         out0c,
-    output reg  [41:0] out42a,
-    output reg  [41:0] out42b,
+    output reg   [6:0] out42a,
+    output reg   [6:0] out42b,
     
     output reg   [7:0] out_sr_other
 );
@@ -42,26 +38,29 @@ module experiment_top(
     reg          out0a_d  = 'b0;
     reg          out0b_d  = 'b0;
     reg          out0c_d  = 'b0;
-    reg   [41:0] out42a_d = 'b0;
-    reg   [41:0] out42b_d = 'b0;
+    reg   [42:0] multa_d  = 'b0;
+    reg    [6:0] out42a_d = 'b0;
+    reg   [42:0] multb_d  = 'b0;
+    reg    [6:0] out42b_d = 'b0;
     
     // Shift register
     // 8, 16, 32, 64, 96, 128, 196, 256-bit SRs
     // Examine use of SRLs from tools
     // MC outputs? Q still used? sync or async?
-    reg    [7:0] sr8    = 'b0;
-    reg   [15:0] sr16   = 'b0;
-    reg   [31:0] sr32   = 'b0;
-    reg   [63:0] sr64   = 'b0;
-    reg   [95:0] sr96   = 'b0;
-    reg  [127:0] sr128  = 'b0;
-    reg  [195:0] sr196  = 'b0;
-    reg  [255:0] sr256  = 'b0;
+    reg    [7:0] sr8   = 'b0;
+    reg   [15:0] sr16  = 'b0;
+    reg   [31:0] sr32  = 'b0;
+    reg   [63:0] sr64  = 'b0;
+    reg   [95:0] sr96  = 'b0;
+    reg  [127:0] sr128 = 'b0;
+    reg  [195:0] sr196 = 'b0;
+    reg  [255:0] sr256 = 'b0;
     
     // Q outputs, always sync outs?
-    reg   [10:0] sr11   = 'b0;
-    reg   [37:0] sr37   = 'b0;
+    reg   [10:0] sr11  = 'b0;
+    reg   [37:0] sr37  = 'b0;
     
+    // Out bus for several SR outs
     reg    [7:0] out_sr_other_d = 'b0;
     
     // Use existing inputs to analuze SRL use
@@ -93,21 +92,25 @@ module experiment_top(
         out_sr_other <= out_sr_other_d;
     end
     
-    // DSP48 logic
+    // DSP48 logic -> Cascades 2 DSP48s each mult operation
+    integer i;
     always @(*)
     begin
-        // Cascades 2 DSP48s
-        out42a_d <= a25 * a18;
-        
-        out42b_d <= b18 * b25 + d1;
+        multa_d = a25 * a18;
+        multb_d = b18 * b25 + d1;
+        // bring mult results in here?
+        for (i = 0; i < 43; i = i + 1) begin
+            out42a_d = out42a_d + multa_d[i];
+            out42b_d = out42b_d + multb_d[i];
+        end
     end
     
     // Read from SRL outs
     always @(*)
     begin
-        out0a_d        =  sr8 [7];
-        out0b_d        = sr16[15];
-        out0c_d        = sr32[31];
+        out0a_d =  sr8 [7];
+        out0b_d = sr16[15];
+        out0c_d = sr32[31];
         
         // Throw other SR out lines to bus to consolidate results
         out_sr_other_d = {
